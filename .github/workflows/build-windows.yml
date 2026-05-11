@@ -33,52 +33,86 @@ jobs:
           if not exist "hivision\creator\weights" mkdir "hivision\creator\weights"
           type nul > hivision\creator\weights\.gitkeep
 
-      - name: Build 单文件版 (Single EXE)
+      - name: 下载模型（用于极速便携版）
+        run: python scripts/download_model.py --models hivision_modnet
+
+      - name: Build 单文件版 (Single EXE) - 模型自动下载
         run: pyinstaller app.spec
 
-      - name: Build 便携版 (Portable Folder)
+      - name: Build 便携版 (Portable Folder) - 模型自动下载
         run: pyinstaller app-portable.spec
+
+      - name: Build 极速便携版 - 模型内置，启动最快 ⚡
+        run: pyinstaller app-fast.spec
 
       - name: Prepare release packages
         shell: pwsh
         run: |
-          # 单文件版
-          New-Item -ItemType Directory -Path release-single -Force
-          Copy-Item dist\HivisionIDPhotos.exe -Destination release-single\
-          Copy-Item README.md -Destination release-single\
-          Copy-Item LICENSE -Destination release-single\
-
-          # 创建便携版说明文件
-          @"
+          # 创建通用说明文件
+          $readme = @"
           ========================================
-              HivisionIDPhotos 便携版
+              HivisionIDPhotos - 证件照制作工具
           ========================================
 
           【使用方法】
           1. 双击 HivisionIDPhotos.exe 启动
           2. 等待浏览器自动打开（或手动访问 http://127.0.0.1:7860）
-          3. 关闭程序：直接关闭控制台窗口
+          3. 上传照片，选择尺寸和背景色
+          4. 下载生成的证件照
+          5. 关闭程序：直接关闭控制台窗口
 
-          【首次运行】
-          - 会自动下载模型文件（约25MB），请耐心等待
-          - 如自动下载失败，请按提示手动下载
+          【版本说明】
 
-          【便携版优势】
-          ✅ 启动更快（无需每次解压）
-          ✅ 可放在U盘随身携带
-          ✅ 模型文件可直接替换升级
+          ⚡ 极速便携版（推荐）
+             - 模型已内置，下载即用
+             - 启动最快，约3秒启动
+             - 可放U盘随身携带
+             - 目录大小约 330MB
 
-          【目录说明】
-          hivision/creator/weights/ - 模型文件存放目录
+          📁 便携版（文件夹模式）
+             - 首次运行自动下载模型
+             - 启动较快
+             - 可手动替换模型文件
+             - 目录大小约 300MB（+25MB 模型）
+
+          📦 单文件版
+             - 只有一个 exe，分享方便
+             - 首次运行自动下载模型
+             - 每次启动需要解压，约10秒
+
+          【常见问题】
+          Q: 浏览器没有自动打开？
+          A: 手动在浏览器访问 http://127.0.0.1:7860
+
+          Q: 下载模型很慢？
+          A: 可以手动下载放到 hivision/creator/weights/ 目录
+
+          Q: 如何关闭程序？
+          A: 直接关闭控制台（黑窗口）即可
 
           ========================================
-          "@ | Out-File -FilePath release-single\使用说明.txt -Encoding utf8
+          项目地址: https://github.com/Zeyi-Lin/HivisionIDPhotos
+          ========================================
+          "@
+
+          # 单文件版
+          New-Item -ItemType Directory -Path release-single -Force
+          Copy-Item dist\HivisionIDPhotos.exe -Destination release-single\
+          Copy-Item README.md -Destination release-single\
+          Copy-Item LICENSE -Destination release-single\
+          $readme | Out-File -FilePath release-single\使用说明.txt -Encoding utf8
 
           # 便携版（文件夹模式）
           Copy-Item dist\HivisionIDPhotos-portable -Destination release-portable -Recurse
           Copy-Item README.md -Destination release-portable\
           Copy-Item LICENSE -Destination release-portable\
-          Copy-Item release-single\使用说明.txt -Destination release-portable\
+          $readme | Out-File -FilePath release-portable\使用说明.txt -Encoding utf8
+
+          # 极速便携版（模型内置）
+          Copy-Item dist\HivisionIDPhotos-极速便携版 -Destination release-fast -Recurse
+          Copy-Item README.md -Destination release-fast\
+          Copy-Item LICENSE -Destination release-fast\
+          ($readme -replace "⚡ 极速便携版（推荐）", "✅ 你正在使用极速便携版") | Out-File -FilePath release-fast\使用说明.txt -Encoding utf8
 
       - name: 上传 单文件版
         uses: actions/upload-artifact@v4
@@ -92,4 +126,11 @@ jobs:
         with:
           name: HivisionIDPhotos-Windows-便携版
           path: release-portable/
+          retention-days: 30
+
+      - name: 上传 极速便携版 ⭐
+        uses: actions/upload-artifact@v4
+        with:
+          name: HivisionIDPhotos-Windows-极速便携版-推荐
+          path: release-fast/
           retention-days: 30
