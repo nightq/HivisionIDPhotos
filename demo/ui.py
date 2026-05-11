@@ -849,27 +849,34 @@ def create_ui(
             # ------------------------ 文件名自动补全 Tab ------------------------
             with gr.Tab("照片文件名自动补全") as rename_tab:
                 gr.Markdown("""
-                ### 📸 三步处理模式
+                ### 📸 本地文件夹处理模式
                 | 步骤 | 功能 | 说明 |
                 |------|------|------|
                 | 步骤1 | OCR 识别姓名 | 将文件名改为 `原文件名-识别出的名字` |
                 | 手动 | 修正文件名 | 如识别不准确，可手动修改输出目录的文件名 |
                 | 步骤3 | Excel 匹配 | 从文件名中提取名字，在 Excel 查找匹配 |
 
-                ### 📋 处理流程
-                1. 上传照片 → 点击「步骤1：OCR 识别并重命名」
-                2. 从输出目录下载文件，手动修正识别错误的文件名
-                3. 将修正后的文件重新上传 → 上传 Excel → 点击「步骤3：Excel 匹配并重命名」
+                ### 💡 优点
+                - **无需上传下载** - 直接在本地文件夹处理
+                - **适合大量照片** - 几百张照片也能快速处理
+                - **随时可中断** - 处理一半也能看到中间结果
                 """)
 
                 # ==================== 步骤1: OCR 识别 ====================
                 with gr.Accordion("📝 步骤1：OCR 识别并添加名字后缀", open=True):
+                    gr.Markdown("""
+                    **输入照片所在的文件夹绝对路径**
+
+                    例如：
+                    - Windows: `C:\\Users\\xxx\\Documents\\照片`
+                    - Mac: `/Users/xxx/Documents/照片`
+                    """)
                     with gr.Row():
                         with gr.Column():
-                            step1_images = gr.File(
-                                file_count="multiple",
-                                label="上传需要识别的照片",
-                                file_types=["image"],
+                            step1_folder = gr.Textbox(
+                                label="照片文件夹路径",
+                                placeholder="请粘贴文件夹的绝对路径",
+                                lines=2,
                             )
                             step1_btn = gr.Button(
                                 "步骤1：开始 OCR 识别",
@@ -877,35 +884,30 @@ def create_ui(
                             )
                             step1_status = gr.Textbox(
                                 label="处理状态",
-                                value="等待上传...",
+                                value="等待输入...",
                                 interactive=False,
                             )
                         with gr.Column():
                             step1_result = gr.Markdown(label="处理结果")
-                            step1_success_gallery = gr.Gallery(
-                                label="✅ 识别成功（文件名 = 原名-名字）",
-                                columns=4,
-                                height="auto",
-                            )
-                            step1_failed_gallery = gr.Gallery(
-                                label="❌ 识别失败",
-                                columns=4,
-                                height="auto",
-                            )
 
                 # ==================== 步骤3: Excel 匹配 ====================
                 with gr.Accordion("🔍 步骤3：Excel 匹配并添加行号后缀", open=True):
+                    gr.Markdown("""
+                    **输入步骤1输出的照片文件夹路径 + Excel 文件路径**
+
+                    照片文件夹通常是：`原文件夹/step1_output/识别成功`
+                    """)
                     with gr.Row():
                         with gr.Column():
-                            step3_images = gr.File(
-                                file_count="multiple",
-                                label="上传步骤1输出的照片（可手动修改过文件名）",
-                                file_types=["image"],
+                            step3_folder = gr.Textbox(
+                                label="照片文件夹路径（step1 输出的文件夹）",
+                                placeholder="请粘贴照片文件夹的绝对路径",
+                                lines=2,
                             )
-                            step3_excel = gr.File(
-                                file_count="single",
-                                label="上传 Excel 文件（需包含「姓名」列）",
-                                file_types=[".xlsx", ".xls"],
+                            step3_excel_path = gr.Textbox(
+                                label="Excel 文件路径",
+                                placeholder="请粘贴 Excel 文件的绝对路径",
+                                lines=2,
                             )
                             step3_name_column = gr.Textbox(
                                 label="姓名列名",
@@ -918,26 +920,16 @@ def create_ui(
                             )
                             step3_status = gr.Textbox(
                                 label="处理状态",
-                                value="等待上传...",
+                                value="等待输入...",
                                 interactive=False,
                             )
                         with gr.Column():
                             step3_result = gr.Markdown(label="处理结果")
-                            step3_matched_gallery = gr.Gallery(
-                                label="✅ 匹配成功（文件名 = 原名-名字-行号）",
-                                columns=4,
-                                height="auto",
-                            )
-                            step3_unmatched_gallery = gr.Gallery(
-                                label="❌ 未匹配（文件名保持不变）",
-                                columns=4,
-                                height="auto",
-                            )
 
                 # ------------------- 步骤1 处理函数 -------------------
-                def process_step1(images):
-                    if not images:
-                        return "请先上传照片", "", [], []
+                def process_step1(folder_path):
+                    if not folder_path or not folder_path.strip():
+                        return "请先输入照片文件夹路径", ""
 
                     try:
                         renamer = FilenameRenamer()
@@ -945,26 +937,13 @@ def create_ui(
                             return (
                                 f"缺少必要依赖: {renamer.deps_missing}\n"
                                 "请运行: pip install pandas easyocr pillow openpyxl",
-                                "", [], [],
+                                "",
                             )
 
-                        image_paths = [img.name for img in images]
-                        result = renamer.step1_ocr_rename(image_paths)
+                        result = renamer.step1_ocr_rename(folder_path.strip())
 
                         if "error" in result:
-                            return result["error"], "", [], []
-
-                        output_dir = result["output_dir"]
-                        success_files = []
-                        failed_files = []
-
-                        success_dir = os.path.join(output_dir, "识别成功")
-                        if os.path.exists(success_dir):
-                            success_files = [os.path.join(success_dir, f) for f in os.listdir(success_dir)]
-
-                        failed_dir = os.path.join(output_dir, "识别失败")
-                        if os.path.exists(failed_dir):
-                            failed_files = [os.path.join(failed_dir, f) for f in os.listdir(failed_dir)]
+                            return result["error"], ""
 
                         result_md = f"""
                         ### 📊 步骤1 处理完成
@@ -975,12 +954,19 @@ def create_ui(
                         | ❌ 识别失败 | {result['failed']} |
 
                         ### 💾 输出目录
-                        文件已保存到：`{output_dir}`
+                        文件已保存到：`{result['output_dir']}`
+
+                        ### 📂 目录结构
+                        ```
+                        {result['output_dir']}/
+                        ├── 识别成功/    ← 这些文件已添加名字后缀
+                        └── 识别失败/    ← 这些文件需要手动处理
+                        ```
 
                         ### ✏️ 下一步
-                        1. 从上面的 Gallery 下载或直接从输出目录复制文件
-                        2. 手动修改识别错误的文件名（保持 原名-名字 的格式）
-                        3. 将修改后的文件上传到步骤3，进行 Excel 匹配
+                        1. 打开「识别成功」文件夹，手动修改识别错误的文件名
+                        2. 保持文件名格式：`原名-名字.jpg`（用 `-` 连接）
+                        3. 将修改后的整个文件夹路径填入步骤3
                         """
 
                         if result["failed_files"]:
@@ -988,20 +974,26 @@ def create_ui(
                             for filename, reason in result["failed_files"]:
                                 result_md += f"- `{filename}`: {reason}\n"
 
+                        if result["success_files"]:
+                            result_md += "\n#### ✅ 部分识别成功示例\n"
+                            for old, new, name in result["success_files"][:10]:
+                                result_md += f"- `{old}` → `{new}` (识别: {name})\n"
+                            if len(result["success_files"]) > 10:
+                                result_md += f"- ... 还有 {len(result['success_files']) - 10} 个文件\n"
+
                         return (
                             f"步骤1完成！成功 {result['success']} / 总计 {result['total']}",
                             result_md,
-                            success_files,
-                            failed_files,
                         )
 
                     except Exception as e:
-                        return f"处理失败: {str(e)}", "", [], []
+                        import traceback
+                        return f"处理失败: {str(e)}", f"详细错误：\n```\n{traceback.format_exc()}\n```"
 
                 # ------------------- 步骤3 处理函数 -------------------
-                def process_step3(images, excel_file, name_column):
-                    if not images or not excel_file:
-                        return "请先上传照片和 Excel 文件", "", [], []
+                def process_step3(folder_path, excel_path, name_column):
+                    if not folder_path or not excel_path or not folder_path.strip() or not excel_path.strip():
+                        return "请先输入照片文件夹路径和 Excel 文件路径", ""
 
                     try:
                         renamer = FilenameRenamer()
@@ -1009,30 +1001,17 @@ def create_ui(
                             return (
                                 f"缺少必要依赖: {renamer.deps_missing}\n"
                                 "请运行: pip install pandas easyocr pillow openpyxl",
-                                "", [], [],
+                                "",
                             )
 
-                        image_paths = [img.name for img in images]
                         result = renamer.step3_excel_match_rename(
-                            image_paths,
-                            excel_file.name,
-                            name_column,
+                            folder_path.strip(),
+                            excel_path.strip(),
+                            name_column.strip(),
                         )
 
                         if "error" in result:
-                            return result["error"], "", [], []
-
-                        output_dir = result["output_dir"]
-                        matched_files = []
-                        unmatched_files = []
-
-                        matched_dir = os.path.join(output_dir, "匹配成功")
-                        if os.path.exists(matched_dir):
-                            matched_files = [os.path.join(matched_dir, f) for f in os.listdir(matched_dir)]
-
-                        unmatched_dir = os.path.join(output_dir, "未匹配")
-                        if os.path.exists(unmatched_dir):
-                            unmatched_files = [os.path.join(unmatched_dir, f) for f in os.listdir(unmatched_dir)]
+                            return result["error"], ""
 
                         result_md = f"""
                         ### 📊 步骤3 处理完成
@@ -1043,50 +1022,50 @@ def create_ui(
                         | ❌ 未匹配 | {result['unmatched']} |
 
                         ### 💾 输出目录
-                        文件已保存到：`{output_dir}`
+                        文件已保存到：`{result['output_dir']}`
+
+                        ### 📂 目录结构
+                        ```
+                        {result['output_dir']}/
+                        ├── 匹配成功/    ← 这些文件已添加行号后缀
+                        └── 未匹配/      ← 这些文件需要手动检查
+                        ```
                         """
 
                         if result["matched_files"]:
-                            result_md += "\n#### ✅ 匹配成功列表\n"
-                            for old, new, name, row in result["matched_files"]:
+                            result_md += "\n#### ✅ 匹配成功示例\n"
+                            for old, new, name, row in result["matched_files"][:10]:
                                 result_md += f"- `{old}` → `{new}` (行号: {row})\n"
+                            if len(result["matched_files"]) > 10:
+                                result_md += f"- ... 还有 {len(result['matched_files']) - 10} 个文件\n"
 
                         if result["unmatched_files"]:
                             result_md += "\n#### ❌ 未匹配列表\n"
-                            for old, name, reason in result["unmatched_files"]:
+                            for old, name, reason in result["unmatched_files"][:20]:
                                 result_md += f"- `{old}` (提取名字: {name or '无'}, 原因: {reason})\n"
+                            if len(result["unmatched_files"]) > 20:
+                                result_md += f"- ... 还有 {len(result['unmatched_files']) - 20} 个文件\n"
 
                         return (
                             f"步骤3完成！匹配成功 {result['matched']} / 总计 {result['total']}",
                             result_md,
-                            matched_files,
-                            unmatched_files,
                         )
 
                     except Exception as e:
-                        return f"处理失败: {str(e)}", "", [], []
+                        import traceback
+                        return f"处理失败: {str(e)}", f"详细错误：\n```\n{traceback.format_exc()}\n```"
 
                 # ------------------- 绑定事件 -------------------
                 step1_btn.click(
                     process_step1,
-                    inputs=[step1_images],
-                    outputs=[
-                        step1_status,
-                        step1_result,
-                        step1_success_gallery,
-                        step1_failed_gallery,
-                    ],
+                    inputs=[step1_folder],
+                    outputs=[step1_status, step1_result],
                 )
 
                 step3_btn.click(
                     process_step3,
-                    inputs=[step3_images, step3_excel, step3_name_column],
-                    outputs=[
-                        step3_status,
-                        step3_result,
-                        step3_matched_gallery,
-                        step3_unmatched_gallery,
-                    ],
+                    inputs=[step3_folder, step3_excel_path, step3_name_column],
+                    outputs=[step3_status, step3_result],
                 )
 
     return demo

@@ -113,16 +113,28 @@ class FilenameRenamer:
 
     # ==================== 步骤1: OCR 识别并重命名 ====================
 
+    def _get_image_files_from_folder(self, folder_path: str) -> List[str]:
+        """从文件夹中获取所有图片文件"""
+        image_exts = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff"}
+        image_files = []
+
+        for f in os.listdir(folder_path):
+            ext = os.path.splitext(f)[1].lower()
+            if ext in image_exts:
+                image_files.append(os.path.join(folder_path, f))
+
+        return image_files
+
     def step1_ocr_rename(
         self,
-        image_files: List[str],
+        folder_path: str,
         output_dir: str = None,
     ) -> Dict:
-        """步骤1: OCR 识别照片中的姓名，重命名为 原文件名-识别出的名字
+        """步骤1: OCR 识别文件夹中照片的姓名，重命名为 原文件名-识别出的名字
 
         Args:
-            image_files: 图片文件路径列表
-            output_dir: 输出目录
+            folder_path: 照片文件夹路径
+            output_dir: 输出目录（默认为原文件夹下的 step1_output）
 
         Returns:
             处理结果
@@ -133,8 +145,15 @@ class FilenameRenamer:
                 "hint": "请安装: pip install pandas easyocr pillow openpyxl",
             }
 
+        if not os.path.exists(folder_path):
+            return {"error": f"文件夹不存在: {folder_path}"}
+
+        image_files = self._get_image_files_from_folder(folder_path)
+        if not image_files:
+            return {"error": "文件夹中没有找到图片文件"}
+
         if output_dir is None:
-            output_dir = tempfile.mkdtemp(prefix="step1_ocr_")
+            output_dir = os.path.join(folder_path, "step1_output")
 
         success_dir = os.path.join(output_dir, "识别成功")
         failed_dir = os.path.join(output_dir, "识别失败")
@@ -151,9 +170,6 @@ class FilenameRenamer:
         }
 
         for img_path in image_files:
-            if not os.path.exists(img_path):
-                continue
-
             original_name = os.path.basename(img_path)
             name_without_ext = os.path.splitext(original_name)[0]
             ext = os.path.splitext(original_name)[1]
@@ -191,7 +207,7 @@ class FilenameRenamer:
 
     def step3_excel_match_rename(
         self,
-        image_files: List[str],
+        folder_path: str,
         excel_path: str,
         name_column: str = "姓名",
         output_dir: str = None,
@@ -202,10 +218,10 @@ class FilenameRenamer:
         匹配失败: 原文件名-名字（不变）
 
         Args:
-            image_files: 图片文件路径列表（来自步骤1的输出）
+            folder_path: 照片文件夹路径（来自步骤1的输出）
             excel_path: Excel 文件路径
             name_column: 姓名列名
-            output_dir: 输出目录
+            output_dir: 输出目录（默认为原文件夹下的 step3_output）
 
         Returns:
             处理结果
@@ -216,13 +232,23 @@ class FilenameRenamer:
                 "hint": "请安装: pip install pandas easyocr pillow openpyxl",
             }
 
+        if not os.path.exists(folder_path):
+            return {"error": f"文件夹不存在: {folder_path}"}
+
+        if not os.path.exists(excel_path):
+            return {"error": f"Excel 文件不存在: {excel_path}"}
+
+        image_files = self._get_image_files_from_folder(folder_path)
+        if not image_files:
+            return {"error": "文件夹中没有找到图片文件"}
+
         try:
             df, actual_name_column = self.load_excel_data(excel_path, name_column)
         except Exception as e:
             return {"error": f"Excel 加载失败: {str(e)}"}
 
         if output_dir is None:
-            output_dir = tempfile.mkdtemp(prefix="step3_match_")
+            output_dir = os.path.join(folder_path, "step3_output")
 
         matched_dir = os.path.join(output_dir, "匹配成功")
         unmatched_dir = os.path.join(output_dir, "未匹配")
