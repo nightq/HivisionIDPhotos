@@ -1,17 +1,42 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_data_files
+import os
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
-datas = [('hivisionai', 'hivisionai'), ('hivision_modnet.onnx', '.'), ('size_list_CN.csv', '.')]
-datas += collect_data_files('gradio_client')
+# 收集 gradio 相关数据文件
+datas = collect_data_files('gradio_client')
 datas += collect_data_files('gradio')
+datas += collect_data_files('gradio_images')
 
+# 项目数据文件
+datas += [
+    ('hivision', 'hivision'),
+    ('demo', 'demo'),
+    ('assets', 'assets'),
+]
+
+# 隐藏导入（处理动态导入的模块）
+hiddenimports = [
+    'onnxruntime',
+    'cv2',
+    'PIL',
+    'numpy',
+    'scipy',
+    'skimage',
+    'mediapipe',
+    'tqdm',
+    'fastapi',
+    'uvicorn',
+]
+hiddenimports += collect_submodules('gradio')
+hiddenimports += collect_submodules('hivision')
+hiddenimports += collect_submodules('demo')
 
 a = Analysis(
-    ['app/web.py'],
+    ['app.py'],
     pathex=[],
     binaries=[],
     datas=datas,
-    hiddenimports=[],
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -40,5 +65,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['assets\hivisionai.ico'],
+    # icon='assets/icon.ico',  # 如有.ico图标文件可取消注释
 )

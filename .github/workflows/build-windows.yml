@@ -1,0 +1,48 @@
+name: Build Windows Executable
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Download AI models
+        run: python scripts/download_model.py --models hivision_modnet
+
+      - name: Build executable with PyInstaller
+        run: pyinstaller app.spec
+
+      - name: Prepare release package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path release -Force
+          Copy-Item dist\HivisionIDPhotos.exe -Destination release\
+          Copy-Item README.md -Destination release\
+          Copy-Item LICENSE -Destination release\
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HivisionIDPhotos-Windows
+          path: release/
+          retention-days: 30

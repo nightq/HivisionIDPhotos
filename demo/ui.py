@@ -266,7 +266,6 @@ def create_ui(
 
                     with gr.Row():
                         watermark_text_options = gr.Text(
-                            max_length=20,
                             label=LOCALES["watermark_text"][DEFAULT_LANG]["label"],
                             value=LOCALES["watermark_text"][DEFAULT_LANG]["value"],
                             placeholder=LOCALES["watermark_text"][DEFAULT_LANG][
