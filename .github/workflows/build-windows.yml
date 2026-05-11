@@ -33,20 +33,63 @@ jobs:
           if not exist "hivision\creator\weights" mkdir "hivision\creator\weights"
           type nul > hivision\creator\weights\.gitkeep
 
-      - name: Build executable with PyInstaller
+      - name: Build 单文件版 (Single EXE)
         run: pyinstaller app.spec
 
-      - name: Prepare release package
+      - name: Build 便携版 (Portable Folder)
+        run: pyinstaller app-portable.spec
+
+      - name: Prepare release packages
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Path release -Force
-          Copy-Item dist\HivisionIDPhotos.exe -Destination release\
-          Copy-Item README.md -Destination release\
-          Copy-Item LICENSE -Destination release\
+          # 单文件版
+          New-Item -ItemType Directory -Path release-single -Force
+          Copy-Item dist\HivisionIDPhotos.exe -Destination release-single\
+          Copy-Item README.md -Destination release-single\
+          Copy-Item LICENSE -Destination release-single\
 
-      - name: Upload build artifact
+          # 创建便携版说明文件
+          @"
+          ========================================
+              HivisionIDPhotos 便携版
+          ========================================
+
+          【使用方法】
+          1. 双击 HivisionIDPhotos.exe 启动
+          2. 等待浏览器自动打开（或手动访问 http://127.0.0.1:7860）
+          3. 关闭程序：直接关闭控制台窗口
+
+          【首次运行】
+          - 会自动下载模型文件（约25MB），请耐心等待
+          - 如自动下载失败，请按提示手动下载
+
+          【便携版优势】
+          ✅ 启动更快（无需每次解压）
+          ✅ 可放在U盘随身携带
+          ✅ 模型文件可直接替换升级
+
+          【目录说明】
+          hivision/creator/weights/ - 模型文件存放目录
+
+          ========================================
+          "@ | Out-File -FilePath release-single\使用说明.txt -Encoding utf8
+
+          # 便携版（文件夹模式）
+          Copy-Item dist\HivisionIDPhotos-portable -Destination release-portable -Recurse
+          Copy-Item README.md -Destination release-portable\
+          Copy-Item LICENSE -Destination release-portable\
+          Copy-Item release-single\使用说明.txt -Destination release-portable\
+
+      - name: 上传 单文件版
         uses: actions/upload-artifact@v4
         with:
-          name: HivisionIDPhotos-Windows
-          path: release/
+          name: HivisionIDPhotos-Windows-单文件版
+          path: release-single/
+          retention-days: 30
+
+      - name: 上传 便携版
+        uses: actions/upload-artifact@v4
+        with:
+          name: HivisionIDPhotos-Windows-便携版
+          path: release-portable/
           retention-days: 30
