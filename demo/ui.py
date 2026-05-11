@@ -849,67 +849,95 @@ def create_ui(
             # ------------------------ 文件名自动补全 Tab ------------------------
             with gr.Tab("照片文件名自动补全") as rename_tab:
                 gr.Markdown("""
-                ### 📸 功能说明
-                1. 上传需要重命名的照片（支持批量）
-                2. 上传包含「姓名」列的 Excel 文件
-                3. 程序会自动 OCR 识别照片中的姓名，在 Excel 中匹配
-                4. 用匹配到的行的所有列值用「-」拼接成新文件名
+                ### 📸 三步处理模式
+                | 步骤 | 功能 | 说明 |
+                |------|------|------|
+                | 步骤1 | OCR 识别姓名 | 将文件名改为 `原文件名-识别出的名字` |
+                | 手动 | 修正文件名 | 如识别不准确，可手动修改输出目录的文件名 |
+                | 步骤3 | Excel 匹配 | 从文件名中提取名字，在 Excel 查找匹配 |
 
-                ### ⚠️ 注意事项
-                - 如果 Excel 中有重名（同一姓名出现多次），该照片不处理，放到「重名」文件夹
-                - 如果未找到匹配姓名，放到「未匹配」文件夹
-                - 处理成功的照片放到「已重命名」文件夹
+                ### 📋 处理流程
+                1. 上传照片 → 点击「步骤1：OCR 识别并重命名」
+                2. 从输出目录下载文件，手动修正识别错误的文件名
+                3. 将修正后的文件重新上传 → 上传 Excel → 点击「步骤3：Excel 匹配并重命名」
                 """)
 
-                with gr.Row():
-                    with gr.Column():
-                        rename_images = gr.File(
-                            file_count="multiple",
-                            label="1. 上传需要重命名的照片",
-                            file_types=["image"],
-                        )
-                        rename_excel = gr.File(
-                            file_count="single",
-                            label="2. 上传 Excel 文件（需包含「姓名」列）",
-                            file_types=[".xlsx", ".xls"],
-                        )
-                        rename_name_column = gr.Textbox(
-                            label="姓名列名",
-                            value="姓名",
-                            placeholder="Excel 中姓名所在的列名，如：姓名、学生姓名、名字",
-                        )
-                        rename_start_btn = gr.Button(
-                            "开始自动重命名",
-                            variant="primary",
-                        )
-                        rename_status = gr.Textbox(
-                            label="处理状态",
-                            value="等待上传...",
-                            interactive=False,
-                        )
+                # ==================== 步骤1: OCR 识别 ====================
+                with gr.Accordion("📝 步骤1：OCR 识别并添加名字后缀", open=True):
+                    with gr.Row():
+                        with gr.Column():
+                            step1_images = gr.File(
+                                file_count="multiple",
+                                label="上传需要识别的照片",
+                                file_types=["image"],
+                            )
+                            step1_btn = gr.Button(
+                                "步骤1：开始 OCR 识别",
+                                variant="primary",
+                            )
+                            step1_status = gr.Textbox(
+                                label="处理状态",
+                                value="等待上传...",
+                                interactive=False,
+                            )
+                        with gr.Column():
+                            step1_result = gr.Markdown(label="处理结果")
+                            step1_success_gallery = gr.Gallery(
+                                label="✅ 识别成功（文件名 = 原名-名字）",
+                                columns=4,
+                                height="auto",
+                            )
+                            step1_failed_gallery = gr.Gallery(
+                                label="❌ 识别失败",
+                                columns=4,
+                                height="auto",
+                            )
 
-                    with gr.Column():
-                        rename_result = gr.Markdown(label="处理结果")
-                        rename_success_gallery = gr.Gallery(
-                            label="✅ 已重命名（点击下载）",
-                            columns=3,
-                            height="auto",
-                        )
-                        rename_duplicate_gallery = gr.Gallery(
-                            label="⚠️ 重名（Excel中有多个同名，需手动处理）",
-                            columns=3,
-                            height="auto",
-                        )
-                        rename_nomatch_gallery = gr.Gallery(
-                            label="❌ 未匹配（未在Excel中找到对应姓名）",
-                            columns=3,
-                            height="auto",
-                        )
+                # ==================== 步骤3: Excel 匹配 ====================
+                with gr.Accordion("🔍 步骤3：Excel 匹配并添加行号后缀", open=True):
+                    with gr.Row():
+                        with gr.Column():
+                            step3_images = gr.File(
+                                file_count="multiple",
+                                label="上传步骤1输出的照片（可手动修改过文件名）",
+                                file_types=["image"],
+                            )
+                            step3_excel = gr.File(
+                                file_count="single",
+                                label="上传 Excel 文件（需包含「姓名」列）",
+                                file_types=[".xlsx", ".xls"],
+                            )
+                            step3_name_column = gr.Textbox(
+                                label="姓名列名",
+                                value="姓名",
+                                placeholder="Excel 中姓名所在的列名",
+                            )
+                            step3_btn = gr.Button(
+                                "步骤3：开始 Excel 匹配",
+                                variant="primary",
+                            )
+                            step3_status = gr.Textbox(
+                                label="处理状态",
+                                value="等待上传...",
+                                interactive=False,
+                            )
+                        with gr.Column():
+                            step3_result = gr.Markdown(label="处理结果")
+                            step3_matched_gallery = gr.Gallery(
+                                label="✅ 匹配成功（文件名 = 原名-名字-行号）",
+                                columns=4,
+                                height="auto",
+                            )
+                            step3_unmatched_gallery = gr.Gallery(
+                                label="❌ 未匹配（文件名保持不变）",
+                                columns=4,
+                                height="auto",
+                            )
 
-                # 处理函数
-                def process_rename(images, excel_file, name_column):
-                    if not images or not excel_file:
-                        return "请先上传照片和 Excel 文件", "", [], [], []
+                # ------------------- 步骤1 处理函数 -------------------
+                def process_step1(images):
+                    if not images:
+                        return "请先上传照片", "", [], []
 
                     try:
                         renamer = FilenameRenamer()
@@ -917,96 +945,147 @@ def create_ui(
                             return (
                                 f"缺少必要依赖: {renamer.deps_missing}\n"
                                 "请运行: pip install pandas easyocr pillow openpyxl",
-                                "", [], [], [],
+                                "", [], [],
                             )
 
                         image_paths = [img.name for img in images]
-                        result = renamer.batch_rename(
+                        result = renamer.step1_ocr_rename(image_paths)
+
+                        if "error" in result:
+                            return result["error"], "", [], []
+
+                        output_dir = result["output_dir"]
+                        success_files = []
+                        failed_files = []
+
+                        success_dir = os.path.join(output_dir, "识别成功")
+                        if os.path.exists(success_dir):
+                            success_files = [os.path.join(success_dir, f) for f in os.listdir(success_dir)]
+
+                        failed_dir = os.path.join(output_dir, "识别失败")
+                        if os.path.exists(failed_dir):
+                            failed_files = [os.path.join(failed_dir, f) for f in os.listdir(failed_dir)]
+
+                        result_md = f"""
+                        ### 📊 步骤1 处理完成
+                        | 状态 | 数量 |
+                        |------|------|
+                        | 总计 | {result['total']} |
+                        | ✅ 识别成功 | {result['success']} |
+                        | ❌ 识别失败 | {result['failed']} |
+
+                        ### 💾 输出目录
+                        文件已保存到：`{output_dir}`
+
+                        ### ✏️ 下一步
+                        1. 从上面的 Gallery 下载或直接从输出目录复制文件
+                        2. 手动修改识别错误的文件名（保持 原名-名字 的格式）
+                        3. 将修改后的文件上传到步骤3，进行 Excel 匹配
+                        """
+
+                        if result["failed_files"]:
+                            result_md += "\n#### ❌ 识别失败列表\n"
+                            for filename, reason in result["failed_files"]:
+                                result_md += f"- `{filename}`: {reason}\n"
+
+                        return (
+                            f"步骤1完成！成功 {result['success']} / 总计 {result['total']}",
+                            result_md,
+                            success_files,
+                            failed_files,
+                        )
+
+                    except Exception as e:
+                        return f"处理失败: {str(e)}", "", [], []
+
+                # ------------------- 步骤3 处理函数 -------------------
+                def process_step3(images, excel_file, name_column):
+                    if not images or not excel_file:
+                        return "请先上传照片和 Excel 文件", "", [], []
+
+                    try:
+                        renamer = FilenameRenamer()
+                        if not renamer.deps_available:
+                            return (
+                                f"缺少必要依赖: {renamer.deps_missing}\n"
+                                "请运行: pip install pandas easyocr pillow openpyxl",
+                                "", [], [],
+                            )
+
+                        image_paths = [img.name for img in images]
+                        result = renamer.step3_excel_match_rename(
                             image_paths,
                             excel_file.name,
                             name_column,
                         )
 
                         if "error" in result:
-                            return result["error"], "", [], [], []
+                            return result["error"], "", [], []
 
-                        # 准备结果展示
                         output_dir = result["output_dir"]
-                        success_files = []
-                        duplicate_files = []
-                        nomatch_files = []
+                        matched_files = []
+                        unmatched_files = []
 
-                        # 加载已重命名文件
-                        success_dir = os.path.join(output_dir, "已重命名")
-                        if os.path.exists(success_dir):
-                            success_files = [
-                                os.path.join(success_dir, f)
-                                for f in os.listdir(success_dir)
-                            ]
+                        matched_dir = os.path.join(output_dir, "匹配成功")
+                        if os.path.exists(matched_dir):
+                            matched_files = [os.path.join(matched_dir, f) for f in os.listdir(matched_dir)]
 
-                        # 加载重名文件
-                        duplicate_dir = os.path.join(output_dir, "重名")
-                        if os.path.exists(duplicate_dir):
-                            duplicate_files = [
-                                os.path.join(duplicate_dir, f)
-                                for f in os.listdir(duplicate_dir)
-                            ]
+                        unmatched_dir = os.path.join(output_dir, "未匹配")
+                        if os.path.exists(unmatched_dir):
+                            unmatched_files = [os.path.join(unmatched_dir, f) for f in os.listdir(unmatched_dir)]
 
-                        # 加载未匹配文件
-                        nomatch_dir = os.path.join(output_dir, "未匹配")
-                        if os.path.exists(nomatch_dir):
-                            nomatch_files = [
-                                os.path.join(nomatch_dir, f)
-                                for f in os.listdir(nomatch_dir)
-                            ]
-
-                        # 生成详细结果
                         result_md = f"""
-                        ### 📊 处理完成
+                        ### 📊 步骤3 处理完成
                         | 状态 | 数量 |
                         |------|------|
                         | 总计 | {result['total']} |
-                        | ✅ 已重命名 | {result['success']} |
-                        | ⚠️ 重名（多个匹配） | {result['duplicate']} |
-                        | ❌ 未匹配 | {result['no_match']} |
-                        | ❌ 处理错误 | {result['error']} |
+                        | ✅ 匹配成功 | {result['matched']} |
+                        | ❌ 未匹配 | {result['unmatched']} |
 
                         ### 💾 输出目录
-                        所有文件已保存到：`{output_dir}`
+                        文件已保存到：`{output_dir}`
                         """
 
-                        # 详细列表
-                        if result["success_files"]:
-                            result_md += "\n#### ✅ 成功重命名列表\n"
-                            for old, new, name in result["success_files"]:
-                                result_md += f"- `{old}` → `{new}` (识别: {name})\n"
+                        if result["matched_files"]:
+                            result_md += "\n#### ✅ 匹配成功列表\n"
+                            for old, new, name, row in result["matched_files"]:
+                                result_md += f"- `{old}` → `{new}` (行号: {row})\n"
 
-                        if result["no_match_files"]:
+                        if result["unmatched_files"]:
                             result_md += "\n#### ❌ 未匹配列表\n"
-                            for old, name, reason in result["no_match_files"]:
-                                result_md += f"- `{old}` (识别: {name or '无'}, 原因: {reason})\n"
+                            for old, name, reason in result["unmatched_files"]:
+                                result_md += f"- `{old}` (提取名字: {name or '无'}, 原因: {reason})\n"
 
                         return (
-                            f"处理完成！成功 {result['success']} / 总计 {result['total']}",
+                            f"步骤3完成！匹配成功 {result['matched']} / 总计 {result['total']}",
                             result_md,
-                            success_files,
-                            duplicate_files,
-                            nomatch_files,
+                            matched_files,
+                            unmatched_files,
                         )
 
                     except Exception as e:
-                        return f"处理失败: {str(e)}", "", [], [], []
+                        return f"处理失败: {str(e)}", "", [], []
 
-                # 绑定事件
-                rename_start_btn.click(
-                    process_rename,
-                    inputs=[rename_images, rename_excel, rename_name_column],
+                # ------------------- 绑定事件 -------------------
+                step1_btn.click(
+                    process_step1,
+                    inputs=[step1_images],
                     outputs=[
-                        rename_status,
-                        rename_result,
-                        rename_success_gallery,
-                        rename_duplicate_gallery,
-                        rename_nomatch_gallery,
+                        step1_status,
+                        step1_result,
+                        step1_success_gallery,
+                        step1_failed_gallery,
+                    ],
+                )
+
+                step3_btn.click(
+                    process_step3,
+                    inputs=[step3_images, step3_excel, step3_name_column],
+                    outputs=[
+                        step3_status,
+                        step3_result,
+                        step3_matched_gallery,
+                        step3_unmatched_gallery,
                     ],
                 )
 
