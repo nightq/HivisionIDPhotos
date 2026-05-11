@@ -7,11 +7,26 @@ datas = collect_data_files('gradio_client')
 datas += collect_data_files('gradio')
 datas += collect_data_files('gradio_images')
 
-# 项目数据文件
+# 项目数据文件 - 排除模型文件（首次启动自动下载）
+import shutil
+import glob
+
+# 复制 hivision 目录，但排除 weights 下的模型文件
+hivision_files = []
+for root, dirs, files in os.walk('hivision'):
+    for file in files:
+        # 跳过模型文件
+        if 'weights' in root and (file.endswith('.onnx') or file.endswith('.mnn')):
+            continue
+        src_path = os.path.join(root, file)
+        dst_path = root
+        hivision_files.append((src_path, dst_path))
+
+datas += hivision_files
 datas += [
-    ('hivision', 'hivision'),
     ('demo', 'demo'),
     ('assets', 'assets'),
+    ('scripts', 'scripts'),
 ]
 
 # 隐藏导入（处理动态导入的模块）

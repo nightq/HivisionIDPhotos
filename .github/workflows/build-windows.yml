@@ -26,8 +26,12 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Download AI models
-        run: python scripts/download_model.py --models hivision_modnet
+      # 注意：模型不会打包进exe，首次运行时自动下载
+      # 这里创建空的 weights 目录，确保目录结构正确
+      - name: Prepare weights directory
+        run: |
+          if not exist "hivision\creator\weights" mkdir "hivision\creator\weights"
+          type nul > hivision\creator\weights\.gitkeep
 
       - name: Build executable with PyInstaller
         run: pyinstaller app.spec
